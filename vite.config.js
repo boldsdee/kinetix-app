@@ -7,5 +7,14 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
+  server: {
+    port: 4000,
+    strictPort: true,
+    host: true
+  },
+  preview: {
+    port: 4000,
+    strictPort: true
+  },
   base: process.env.NODE_ENV === 'development' ? '/' : './'
 })
