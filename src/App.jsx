@@ -5,10 +5,11 @@ import {
   RotateCcw, Sliders, Activity, Layers, Play, Zap, ToggleRight, 
   Square, ShieldAlert, Monitor, Terminal, Code2, ArrowRight,
   Maximize2, Minus, X, Sun, Moon, Cpu, User, LogOut, ShieldCheck,
-  Plus, MousePointerClick
+  Plus, MousePointerClick, Disc3, Music
 } from 'lucide-react';
 import { haptics } from './utils/audioHaptics';
 import AuthModal from './components/AuthModal';
+import SoundStudioModal from './components/SoundStudioModal';
 
 // Preset configurations
 const PRESETS = {
@@ -105,15 +106,18 @@ export default function App() {
   const [magnetPos, setMagnetPos] = useState({ x: 0, y: 0 });
   const buttonRef = useRef(null);
 
-  // Trigger sound based on current selection
+  // Sound Library Modal State (52+ Procedural Sound Models)
+  const [showSoundModal, setShowSoundModal] = useState(false);
+
+  // Trigger sound based on current selection (supports all 52 procedural models)
   const triggerAudio = (overrideType) => {
     if (abTestMode === 'sterile' || !soundEnabled) return;
     const type = overrideType || soundType;
-    if (type === 'mechanical') haptics.playMechanicalClick();
-    else if (type === 'pop') haptics.playTactilePop();
-    else if (type === 'glass') haptics.playGlassTick();
-    else if (type === 'thud') haptics.playSolenoidThud();
-    else if (type === 'rebound') haptics.playSpringRebound(stiffness, damping);
+    if (type === 'rebound') {
+      haptics.playSpringRebound(stiffness, damping);
+    } else {
+      haptics.play(type);
+    }
   };
 
   const applyPreset = (key) => {
@@ -626,6 +630,20 @@ export const triggerHaptic = () => {
                 {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
               </button>
 
+              {/* Sound Lab Modal Trigger Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSoundModal(true);
+                  haptics.playGlassTick();
+                }}
+                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition border ${themeStyles.border} hover:border-cyan-400 bg-cyan-500/10 text-cyan-300 cursor-pointer`}
+                title="Open 52+ Procedural Sound Lab"
+              >
+                <Disc3 size={13} className="text-cyan-400" />
+                <span>Sound Lab (52)</span>
+              </button>
+
               {/* Account / Auth Button */}
               {currentUser ? (
                 <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${themeStyles.surfaceSubtle} border ${themeStyles.border} text-xs`}>
@@ -766,26 +784,84 @@ export const triggerHaptic = () => {
                 </div>
 
                 {/* Sound Preset Selector */}
-                <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-700/30">
-                  <span className={`text-[11px] font-mono ${themeStyles.textMuted}`}>Acoustic Haptic Profile</span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {['mechanical', 'pop', 'glass', 'thud', 'rebound'].map((snd) => (
+                <div className="flex flex-col gap-2 pt-2 border-t border-slate-700/30">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[11px] font-mono ${themeStyles.textMuted}`}>Acoustic Haptic Profile</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSoundModal(true)}
+                      className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <Sparkles size={11} className="text-amber-400" />
+                      <span>52 Sounds</span>
+                    </button>
+                  </div>
+
+                  {/* Active Selected Sound Card */}
+                  <div 
+                    onClick={() => setShowSoundModal(true)}
+                    className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/50 transition cursor-pointer flex items-center justify-between group"
+                    title="Click to open 52+ Sound Library"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
+                        <Volume2 size={13} />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-xs font-bold capitalize text-slate-100 group-hover:text-cyan-300 transition">
+                          {soundType.replace('_', ' ')}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-500">
+                          Active bench audio
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerAudio();
+                      }}
+                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-cyan-500/20 text-xs font-mono text-cyan-300 transition"
+                      title="Test Audio"
+                    >
+                      <Play size={10} />
+                    </button>
+                  </div>
+
+                  {/* Quick Popular Picks */}
+                  <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                    {['mechanical', 'swipe_card', 'pop', 'thud', 'camera', 'positive_chime'].map((snd) => (
                       <button
                         key={snd}
                         onClick={() => {
                           setSoundType(snd);
                           triggerAudio(snd);
                         }}
-                        className={`px-2 py-1 rounded-lg text-[11px] font-mono capitalize border transition ${
+                        className={`px-1.5 py-1 rounded-lg text-[10px] font-mono capitalize border transition truncate cursor-pointer ${
                           soundType === snd
                             ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-semibold'
                             : 'bg-transparent border-slate-700/50 text-slate-400 hover:border-slate-500'
                         }`}
+                        title={snd}
                       >
-                        {snd}
+                        {snd.replace('_', ' ')}
                       </button>
                     ))}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSoundModal(true)}
+                    className={`w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition border ${
+                      isSwiss 
+                        ? 'bg-[#ff5000]/10 border-[#ff5000]/30 text-[#ff5000] hover:bg-[#ff5000]/20' 
+                        : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20'
+                    } cursor-pointer`}
+                  >
+                    <Disc3 size={13} className="text-cyan-400" />
+                    <span>Open 52-Sound Haptic Lab</span>
+                  </button>
                 </div>
 
               </div>
@@ -1117,6 +1193,18 @@ export const triggerHaptic = () => {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onLoginSuccess={(userData) => setCurrentUser(userData)}
+        isSwiss={isSwiss}
+      />
+
+      {/* 52+ Procedural Sound Studio & Soundboard Modal */}
+      <SoundStudioModal
+        isOpen={showSoundModal}
+        onClose={() => setShowSoundModal(false)}
+        activeSound={soundType}
+        onSelectSound={(soundId) => {
+          setSoundType(soundId);
+          triggerAudio(soundId);
+        }}
         isSwiss={isSwiss}
       />
 
