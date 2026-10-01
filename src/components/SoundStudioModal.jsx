@@ -52,13 +52,27 @@ window.kinetixHaptics?.play('${sound.id}');`;
     setTimeout(() => setCopiedId(null), 1800);
   };
 
+  // Keyboard dismiss on Escape
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md">
+        <div 
+          onClick={onClose}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md"
+        >
         
         {/* Modal Container */}
         <motion.div
+          onClick={(e) => e.stopPropagation()}
           initial={{ scale: 0.94, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.94, opacity: 0, y: 15 }}
