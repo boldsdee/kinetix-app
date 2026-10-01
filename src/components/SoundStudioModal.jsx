@@ -21,8 +21,6 @@ export default function SoundStudioModal({ isOpen, onClose, activeSound, onSelec
   const [copiedId, setCopiedId] = useState(null);
   const [lastPlayedId, setLastPlayedId] = useState(null);
 
-  if (!isOpen) return null;
-
   // Filter sounds
   const filteredSounds = useMemo(() => {
     return SOUND_LIBRARY.filter((item) => {
@@ -34,6 +32,8 @@ export default function SoundStudioModal({ isOpen, onClose, activeSound, onSelec
       return matchesCat && matchesQuery;
     });
   }, [selectedCategory, searchQuery]);
+
+  if (!isOpen) return null;
 
   const handlePlaySound = (sound) => {
     setLastPlayedId(sound.id);
