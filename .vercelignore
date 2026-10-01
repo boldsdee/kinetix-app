@@ -1,0 +1,14 @@
+dist-electron
+dist-electron/
+dist
+dist/
+node_modules
+node_modules/
+*.dmg
+*.exe
+*.zip
+*.blockmap
+*.pkg
+.git
+.github
+electron/
