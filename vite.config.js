@@ -16,5 +16,5 @@ export default defineConfig({
     port: 4000,
     strictPort: true
   },
-  base: process.env.NODE_ENV === 'development' ? '/' : './'
+  base: process.env.ELECTRON === 'true' ? './' : '/'
 })
