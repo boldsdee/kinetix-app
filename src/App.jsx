@@ -5,10 +5,12 @@ import {
   RotateCcw, Sliders, Activity, Layers, Play, Zap, ToggleRight, 
   Square, ShieldAlert, Monitor, Terminal, Code2, ArrowRight,
   Maximize2, Minus, X, Sun, Moon, Cpu,
-  Plus, MousePointerClick, Disc3, Music
+  Plus, MousePointerClick, Disc3, Music, Lock
 } from 'lucide-react';
 import { haptics } from './utils/audioHaptics';
 import SoundStudioModal from './components/SoundStudioModal';
+import AdminDashboardModal from './components/AdminDashboardModal';
+import { trackDownload } from './utils/telemetry';
 
 // Preset configurations
 const PRESETS = {
@@ -90,6 +92,31 @@ export default function App() {
 
   // Sound Library Modal State (52+ Procedural Sound Models)
   const [showSoundModal, setShowSoundModal] = useState(false);
+
+  // Private Admin Dashboard Modal State
+  const [showAdminModal, setShowAdminModal] = useState(false);
+
+  // Check URL query for ?admin
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('admin')) {
+        setShowAdminModal(true);
+      }
+    }
+  }, []);
+
+  // Hidden admin keyboard shortcut: Cmd+Shift+A or Ctrl+Shift+A
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        setShowAdminModal((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Trigger sound based on current selection (supports all 52 procedural models)
   const triggerAudio = (overrideType) => {
@@ -372,6 +399,7 @@ export const triggerHaptic = () => {
     navigator.clipboard.writeText(code);
     setCopiedToken(true);
     triggerAudio('glass');
+    trackDownload('framer_token');
     setTimeout(() => setCopiedToken(false), 2000);
   };
 
@@ -460,6 +488,7 @@ export const triggerHaptic = () => {
             <div className="flex flex-col sm:flex-row gap-3 justify-center xl:justify-start">
               <a 
                 href="https://github.com/boldsdee/kinetix-app/releases/latest/download/Kinetix-1.0.0-arm64.dmg" 
+                onClick={() => trackDownload('mac_dmg')}
                 className="flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[14px] shadow-lg shadow-cyan-500/20 transition active:scale-95" 
                 target="_blank" 
                 rel="noopener noreferrer"
@@ -469,6 +498,7 @@ export const triggerHaptic = () => {
               </a>
               <a 
                 href="https://github.com/boldsdee/kinetix-app/releases/latest/download/Kinetix-Setup-1.0.0.exe" 
+                onClick={() => trackDownload('windows_exe')}
                 className={`flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl border ${themeStyles.border} hover:border-slate-500 ${themeStyles.surface} font-semibold text-[14px] transition active:scale-95`} 
                 target="_blank" 
                 rel="noopener noreferrer"
@@ -1130,7 +1160,19 @@ export const triggerHaptic = () => {
 
       </div>
 
-
+      {/* Subtle Footer Bar with Hidden Telemetry Trigger */}
+      <div className="w-full max-w-7xl mt-8 pt-4 border-t border-slate-800/40 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+        <span>Kinetix Studio v1.0 • Tactile Micro-Interaction Engine</span>
+        <button
+          type="button"
+          onClick={() => setShowAdminModal(true)}
+          className="flex items-center gap-1.5 hover:text-slate-300 transition cursor-pointer p-1"
+          title="Telemetry Portal (Cmd+Shift+A)"
+        >
+          <Lock size={11} className="text-slate-600 hover:text-slate-400" />
+          <span>Telemetry</span>
+        </button>
+      </div>
 
       {/* 52+ Procedural Sound Studio & Soundboard Modal */}
       <SoundStudioModal
@@ -1141,6 +1183,13 @@ export const triggerHaptic = () => {
           setSoundType(soundId);
           triggerAudio(soundId);
         }}
+        isSwiss={isSwiss}
+      />
+
+      {/* Private Admin Dashboard & Download Telemetry Modal */}
+      <AdminDashboardModal
+        isOpen={showAdminModal}
+        onClose={() => setShowAdminModal(false)}
         isSwiss={isSwiss}
       />
 
