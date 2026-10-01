@@ -33,8 +33,6 @@ export default function SoundStudioModal({ isOpen, onClose, activeSound, onSelec
     });
   }, [selectedCategory, searchQuery]);
 
-  if (!isOpen) return null;
-
   const handlePlaySound = (sound) => {
     setLastPlayedId(sound.id);
     haptics.play(sound.id);
@@ -56,7 +54,8 @@ window.kinetixHaptics?.play('${sound.id}');`;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md">
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md">
         
         {/* Modal Container */}
         <motion.div
@@ -253,6 +252,7 @@ window.kinetixHaptics?.play('${sound.id}');`;
 
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 }
