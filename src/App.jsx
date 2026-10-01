@@ -4,7 +4,8 @@ import {
   Download, Sparkles, Volume2, VolumeX, Copy, Check, Info, 
   RotateCcw, Sliders, Activity, Layers, Play, Zap, ToggleRight, 
   Square, ShieldAlert, Monitor, Terminal, Code2, ArrowRight,
-  Maximize2, Minus, X, Sun, Moon, Cpu, User, LogOut, ShieldCheck
+  Maximize2, Minus, X, Sun, Moon, Cpu, User, LogOut, ShieldCheck,
+  Plus, MousePointerClick
 } from 'lucide-react';
 import { haptics } from './utils/audioHaptics';
 import AuthModal from './components/AuthModal';
@@ -168,6 +169,175 @@ export default function App() {
       settlingTime: ts
     };
   }, [stiffness, damping, mass]);
+
+  // Interactive Wave Control Pins / Dots
+  const [controlPins, setControlPins] = useState([
+    { id: 'start', tNorm: 0.03, label: 'Tension (k)', role: 'stiffness' },
+    { id: 'crest', tNorm: 0.22, label: 'Overshoot (c)', role: 'damping' },
+    { id: 'node', tNorm: 0.50, label: 'Frequency (m)', role: 'mass' }
+  ]);
+  const [activeDraggingPin, setActiveDraggingPin] = useState(null);
+  const [hoveredPin, setHoveredPin] = useState(null);
+  const svgRef = useRef(null);
+
+  // Convert client pointer event to SVG viewBox (440x120) coordinates
+  const getSvgCoordinates = (e) => {
+    if (!svgRef.current) return { x: 0, y: 0 };
+    const rect = svgRef.current.getBoundingClientRect();
+    const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+    const clientY = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
+    const x = ((clientX - rect.left) / rect.width) * 440;
+    const y = ((clientY - rect.top) / rect.height) * 120;
+    return {
+      x: Math.max(0, Math.min(440, x)),
+      y: Math.max(0, Math.min(120, y))
+    };
+  };
+
+  // Compute exact coordinates of all pins on the wave line
+  const pinPositions = useMemo(() => {
+    const k = stiffness;
+    const c = damping;
+    const m = Math.max(0.1, mass);
+    const w0 = Math.sqrt(k / m);
+    const zeta = c / (2 * Math.sqrt(k * m));
+    const width = 440;
+    const height = 120;
+    const midY = height / 2;
+    const amp = height * 0.38;
+
+    return controlPins.map((pin) => {
+      const t = pin.tNorm * 0.8;
+      let yNorm = 0;
+      if (zeta < 1) {
+        const wd = w0 * Math.sqrt(1 - zeta * zeta);
+        yNorm = Math.exp(-zeta * w0 * t) * Math.cos(wd * t);
+      } else {
+        yNorm = Math.exp(-w0 * t) * (1 + w0 * t);
+      }
+      const cx = pin.tNorm * width;
+      const cy = midY - yNorm * amp;
+      return {
+        ...pin,
+        cx,
+        cy,
+        yNorm
+      };
+    });
+  }, [controlPins, stiffness, damping, mass]);
+
+  // Pointer drag listener for dragging pins up and down
+  useEffect(() => {
+    if (!activeDraggingPin) return;
+
+    const handlePointerMove = (e) => {
+      const { x, y } = getSvgCoordinates(e);
+      const pin = controlPins.find(p => p.id === activeDraggingPin);
+      if (!pin) return;
+
+      // Invert Y coordinate relative to center line midY=60
+      // y=14 is max top amplitude (+1.0), y=60 is 0, y=106 is max bottom (-1.0)
+      const displacement = (60 - y) / 45.6;
+
+      if (pin.role === 'damping') {
+        // Dragging the rebound crest up/down alters damping
+        // Higher crest (displacement > 0.3) -> lower damping (bouncy)
+        // Flatter crest (displacement near 0) -> higher damping (no bounce)
+        const targetDamping = Math.round(Math.max(6, Math.min(60, 46 - displacement * 36)));
+        setDamping(prev => {
+          if (Math.abs(prev - targetDamping) >= 1) {
+            haptics.playSliderTick();
+            return targetDamping;
+          }
+          return prev;
+        });
+        setActivePreset('');
+      } else if (pin.role === 'stiffness') {
+        // Dragging initial tension up/down alters stiffness
+        const targetStiffness = Math.round(Math.max(120, Math.min(880, 160 + (1 - y / 120) * 720)));
+        setStiffness(prev => {
+          if (Math.abs(prev - targetStiffness) >= 10) {
+            haptics.playSliderTick();
+            return targetStiffness;
+          }
+          return prev;
+        });
+        setActivePreset('');
+      } else if (pin.role === 'mass') {
+        // Dragging horizontally adjusts mass/period
+        const targetMass = Number(Math.max(0.3, Math.min(2.8, (x / 440) * 3.2)).toFixed(1));
+        setMass(prev => {
+          if (prev !== targetMass) {
+            haptics.playSliderTick();
+            return targetMass;
+          }
+          return prev;
+        });
+        setActivePreset('');
+      } else {
+        // Custom user-added dot: dragging vertically bends damping/overshoot
+        const targetDamping = Math.round(Math.max(8, Math.min(58, 44 - Math.abs(displacement) * 32)));
+        setDamping(targetDamping);
+        haptics.playSliderTick();
+        setActivePreset('');
+      }
+    };
+
+    const handlePointerUp = () => {
+      setActiveDraggingPin(null);
+      haptics.playMechanicalClick();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [activeDraggingPin, controlPins]);
+
+  // Click on SVG to drop a new control point
+  const handleSvgCanvasClick = (e) => {
+    if (activeDraggingPin) return;
+    const { x } = getSvgCoordinates(e);
+    const tNorm = Math.max(0.06, Math.min(0.94, x / 440));
+    
+    // Check if clicking close to an existing pin
+    const isNear = pinPositions.some(p => Math.abs(p.cx - x) < 22);
+    if (isNear) return;
+
+    const newPin = {
+      id: `pin_${Date.now()}`,
+      tNorm,
+      label: `Point ${controlPins.length + 1}`,
+      role: 'custom'
+    };
+    setControlPins(prev => [...prev, newPin]);
+    haptics.playGlassTick();
+  };
+
+  const handleAddPoint = (e) => {
+    e.stopPropagation();
+    const randT = Number((0.15 + Math.random() * 0.65).toFixed(2));
+    const newPin = {
+      id: `pin_${Date.now()}`,
+      tNorm: randT,
+      label: `Point ${controlPins.length + 1}`,
+      role: 'custom'
+    };
+    setControlPins(prev => [...prev, newPin]);
+    haptics.playGlassTick();
+  };
+
+  const handleResetPoints = (e) => {
+    e.stopPropagation();
+    setControlPins([
+      { id: 'start', tNorm: 0.03, label: 'Tension (k)', role: 'stiffness' },
+      { id: 'crest', tNorm: 0.22, label: 'Overshoot (c)', role: 'damping' },
+      { id: 'node', tNorm: 0.50, label: 'Frequency (m)', role: 'mass' }
+    ]);
+    haptics.playTactilePop();
+  };
 
   // Framer Motion spring config depending on A/B mode
   const springTransition = useMemo(() => {
@@ -624,10 +794,30 @@ export const triggerHaptic = () => {
               <div className={`lg:col-span-7 p-4 rounded-2xl ${themeStyles.surfaceSubtle} border ${themeStyles.border} flex flex-col justify-between`}>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                       <Activity size={14} className="text-cyan-400" />
-                      Spring Physics Oscilloscope
-                    </span>
+                      <span className="text-xs font-bold uppercase tracking-wider">
+                        Spring Physics Oscilloscope
+                      </span>
+                      <div className="flex items-center gap-1.5 ml-2">
+                        <button
+                          type="button"
+                          onClick={handleAddPoint}
+                          className="px-2 py-0.5 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-[10px] font-mono border border-cyan-500/30 flex items-center gap-1 transition cursor-pointer"
+                          title="Click to add another control point on the wave"
+                        >
+                          <Plus size={10} /> Add Dot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResetPoints}
+                          className="px-2 py-0.5 rounded-md hover:bg-slate-700/50 text-slate-400 hover:text-slate-200 text-[10px] font-mono border border-slate-700/50 flex items-center gap-1 transition cursor-pointer"
+                          title="Reset to default control handles"
+                        >
+                          <RotateCcw size={10} /> Reset
+                        </button>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
                       <span>&zeta; = {dampingRatio}</span>
                       <span>&omega;₀ = {angularFreq} rad/s</span>
@@ -635,8 +825,12 @@ export const triggerHaptic = () => {
                     </div>
                   </div>
 
-                  {/* SVG Oscilloscope Canvas */}
-                  <div className="w-full h-32 bg-slate-950/60 rounded-xl border border-slate-800 relative overflow-hidden flex items-center justify-center p-2">
+                  {/* SVG Oscilloscope Canvas with Draggable Control Dots */}
+                  <div 
+                    onClick={handleSvgCanvasClick}
+                    className="w-full h-36 bg-slate-950/80 rounded-xl border border-slate-800 relative overflow-hidden flex items-center justify-center p-2 cursor-crosshair group select-none"
+                    title="Click anywhere along the line to add a control dot. Drag dots up & down to sculpt the wave."
+                  >
                     {/* Grid lines */}
                     <div className="absolute inset-0 grid grid-cols-8 grid-rows-4 pointer-events-none opacity-20">
                       {Array.from({ length: 32 }).map((_, i) => (
@@ -644,7 +838,7 @@ export const triggerHaptic = () => {
                       ))}
                     </div>
 
-                    <svg viewBox="0 0 440 120" className="w-full h-full relative z-10">
+                    <svg ref={svgRef} viewBox="0 0 440 120" className="w-full h-full relative z-10 overflow-visible">
                       {/* Zero center axis */}
                       <line x1="0" y1="60" x2="440" y2="60" stroke="#334155" strokeDasharray="3 3" strokeWidth="1" />
                       
@@ -652,15 +846,116 @@ export const triggerHaptic = () => {
                       <polyline
                         fill="none"
                         stroke={isSwiss ? '#ff5000' : '#06b6d4'}
-                        strokeWidth="2.5"
+                        strokeWidth="3"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         points={curvePoints}
                       />
+
+                      {/* Drop guideline from each pin to center equilibrium axis */}
+                      {pinPositions.map((pin) => (
+                        <line
+                          key={`line_${pin.id}`}
+                          x1={pin.cx}
+                          y1={pin.cy}
+                          x2={pin.cx}
+                          y2={60}
+                          stroke={pin.role === 'stiffness' ? '#06b6d4' : pin.role === 'damping' ? '#f59e0b' : pin.role === 'mass' ? '#10b981' : '#a855f7'}
+                          strokeDasharray="2 2"
+                          strokeWidth="1"
+                          strokeOpacity={hoveredPin === pin.id || activeDraggingPin === pin.id ? 0.9 : 0.35}
+                          pointerEvents="none"
+                        />
+                      ))}
+
+                      {/* Draggable Control Dots / Handles */}
+                      {pinPositions.map((pin) => {
+                        const isDragging = activeDraggingPin === pin.id;
+                        const isHovered = hoveredPin === pin.id;
+                        const dotColor = pin.role === 'stiffness' 
+                          ? (isSwiss ? '#ff5000' : '#06b6d4') 
+                          : pin.role === 'damping' 
+                            ? '#f59e0b' 
+                            : pin.role === 'mass' 
+                              ? '#10b981' 
+                              : '#a855f7';
+
+                        return (
+                          <g
+                            key={pin.id}
+                            className="cursor-grab active:cursor-grabbing"
+                            onPointerDown={(e) => {
+                              e.stopPropagation();
+                              setActiveDraggingPin(pin.id);
+                              haptics.playMechanicalClick();
+                            }}
+                            onPointerEnter={() => setHoveredPin(pin.id)}
+                            onPointerLeave={() => setHoveredPin(null)}
+                          >
+                            {/* Outer soft aura ring */}
+                            <circle
+                              cx={pin.cx}
+                              cy={pin.cy}
+                              r={isDragging ? 16 : isHovered ? 13 : 9}
+                              fill={dotColor}
+                              fillOpacity={isDragging ? 0.35 : isHovered ? 0.25 : 0.12}
+                              stroke={dotColor}
+                              strokeWidth={isDragging ? 2 : 1}
+                              strokeOpacity={isDragging ? 0.9 : 0.5}
+                              className="transition-all duration-150"
+                            />
+
+                            {/* Solid draggable center dot */}
+                            <circle
+                              cx={pin.cx}
+                              cy={pin.cy}
+                              r={isDragging ? 6.5 : isHovered ? 5.5 : 4.5}
+                              fill={dotColor}
+                              stroke="#ffffff"
+                              strokeWidth="2"
+                              className="transition-all duration-150 shadow-lg"
+                            />
+
+                            {/* Dynamic tooltip badge on hover/drag */}
+                            {(isHovered || isDragging) && (
+                              <g pointerEvents="none" transform={`translate(${Math.max(45, Math.min(395, pin.cx))}, ${Math.max(18, pin.cy - 16)})`}>
+                                <rect
+                                  x="-42"
+                                  y="-14"
+                                  width="84"
+                                  height="18"
+                                  rx="5"
+                                  fill="#090d16"
+                                  stroke={dotColor}
+                                  strokeWidth="1"
+                                  opacity="0.95"
+                                />
+                                <text
+                                  x="0"
+                                  y="-2"
+                                  fill="#ffffff"
+                                  fontSize="9"
+                                  fontWeight="600"
+                                  fontFamily="monospace"
+                                  textAnchor="middle"
+                                >
+                                  {pin.role === 'stiffness' 
+                                    ? `k: ${stiffness} N/m` 
+                                    : pin.role === 'damping' 
+                                      ? `c: ${damping} Ns/m` 
+                                      : pin.role === 'mass' 
+                                        ? `m: ${mass} kg` 
+                                        : `Y: ${(60 - pin.cy).toFixed(0)}px`}
+                                </text>
+                              </g>
+                            )}
+                          </g>
+                        );
+                      })}
                     </svg>
 
-                    <div className="absolute bottom-2 right-3 text-[10px] font-mono text-slate-500">
-                      F = -kx - cv
+                    <div className="absolute bottom-2 right-3 text-[10px] font-mono text-slate-500 pointer-events-none">
+                      Drag dots up/down to sculpt • F = -kx - cv
                     </div>
                   </div>
                 </div>
