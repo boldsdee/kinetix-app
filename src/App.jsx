@@ -4,9 +4,10 @@ import {
   Download, Sparkles, Volume2, VolumeX, Copy, Check, Info, 
   RotateCcw, Sliders, Activity, Layers, Play, Zap, ToggleRight, 
   Square, ShieldAlert, Monitor, Terminal, Code2, ArrowRight,
-  Maximize2, Minus, X, Sun, Moon, Cpu
+  Maximize2, Minus, X, Sun, Moon, Cpu, User, LogOut, ShieldCheck
 } from 'lucide-react';
 import { haptics } from './utils/audioHaptics';
+import AuthModal from './components/AuthModal';
 
 // Preset configurations
 const PRESETS = {
@@ -81,6 +82,23 @@ export default function App() {
   const [sliderVal, setSliderVal] = useState(65);
   const [abTestMode, setAbTestMode] = useState('craft'); // 'craft' vs 'sterile'
   const [copiedToken, setCopiedToken] = useState(false);
+
+  // Authentication State (Independent of Google SSO)
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kinetix_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleLogout = () => {
+    localStorage.removeItem('kinetix_user');
+    setCurrentUser(null);
+    haptics.playTactilePop();
+  };
 
   // Magnetic button state
   const [magnetPos, setMagnetPos] = useState({ x: 0, y: 0 });
@@ -334,6 +352,36 @@ export const triggerHaptic = () => {
               </div>
             </div>
 
+            {/* Account / Pro Authentication Status Box */}
+            <div className={`p-4 rounded-xl border ${themeStyles.border} ${themeStyles.surface} text-left flex items-center justify-between`}>
+              <div className="flex items-center gap-3">
+                <ShieldCheck size={20} className="text-cyan-400 shrink-0" />
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                    {currentUser ? `Pro Account: ${currentUser.email}` : 'Independent Auth'}
+                  </div>
+                  <p className={`text-[11px] ${themeStyles.textMuted}`}>
+                    {currentUser ? 'Zero Google dependencies active' : 'Log in with Email/Password or GitHub'}
+                  </p>
+                </div>
+              </div>
+              {currentUser ? (
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-1.5 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 text-xs font-semibold transition cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className={`px-3 py-1.5 rounded-lg ${themeStyles.accent} text-slate-950 text-xs font-bold transition hover:opacity-90 cursor-pointer`}
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
+
           </div>
         )}
 
@@ -407,6 +455,33 @@ export const triggerHaptic = () => {
               >
                 {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
               </button>
+
+              {/* Account / Auth Button */}
+              {currentUser ? (
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${themeStyles.surfaceSubtle} border ${themeStyles.border} text-xs`}>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="font-mono text-[11px] font-semibold text-slate-200">{currentUser.email}</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">PRO</span>
+                  <button 
+                    onClick={handleLogout} 
+                    className="hover:text-rose-400 ml-1 transition p-0.5 cursor-pointer text-slate-400" 
+                    title="Sign Out"
+                  >
+                    <LogOut size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setShowAuthModal(true);
+                    triggerAudio('pop');
+                  }}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition border ${themeStyles.border} hover:border-cyan-400 ${themeStyles.surfaceSubtle} text-slate-200 cursor-pointer`}
+                >
+                  <User size={13} className={themeStyles.accentText} />
+                  <span>Sign In</span>
+                </button>
+              )}
 
             </div>
           </div>
@@ -741,6 +816,14 @@ export const triggerHaptic = () => {
         </div>
 
       </div>
+
+      {/* Independent Authentication Modal (No Google SSO dependencies) */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLoginSuccess={(userData) => setCurrentUser(userData)}
+        isSwiss={isSwiss}
+      />
 
     </div>
   );
